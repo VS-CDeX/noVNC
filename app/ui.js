@@ -13,9 +13,11 @@ import { isTouchDevice, isSafari, isIOS, isAndroid, dragThreshold }
 import { setCapture, getPointerEvent } from '../core/util/events.js';
 import KeyTable from "../core/input/keysym.js";
 import keysyms from "../core/input/keysymdef.js";
+import tableOfKeys from "../core/input/azerty.js";
 import Keyboard from "../core/input/keyboard.js";
 import RFB from "../core/rfb.js";
 import * as WebUtil from "./webutil.js";
+
 const UI = {
 
     connected: false,
@@ -37,6 +39,8 @@ const UI = {
     inhibit_reconnect: true,
     reconnect_callback: null,
     reconnect_password: null,
+
+    keyboardLayout: 'azerty',
 
     prime() {
         return WebUtil.initSettings().then(() => {
@@ -129,7 +133,7 @@ const UI = {
         }
 
         // Settings with immediate effects
-        UI.initSetting('logging', 'warn');
+        UI.initSetting('logging', 'error');
         UI.updateLogging();
 
         // if port == 80 (or 443) then it won't be present and should be
@@ -345,6 +349,8 @@ const UI = {
             .addEventListener('click', UI.clipboardClear);
         document.getElementById("noVNC_clipboard_close_button")
             .addEventListener('click', UI.clipboardClose);
+        document.getElementById("noVNC_keyboardLayout")
+            .addEventListener('change', UI.clipboardKeyboardChoose);
     },
 
     // Add a call to save settings when the element changes,
@@ -829,7 +835,7 @@ const UI = {
     closeAllPanels() {
         UI.closeSettingsPanel();
         UI.closePowerPanel();
-        UI.closeClipboardPanel();
+        // UI.closeClipboardPanel();
         UI.closeExtraKeys();
         UI.closeSpecialKeys();
     },
@@ -974,24 +980,179 @@ const UI = {
             UI.closeClipboardPanel();
         }
     },
+    clipboardKeyboardChoose(e) {
+        UI.keyboardLayout = e.target.value;
+    },
+
+
 
     writeText() {
+        function convertCharacters(character) {
+            return tableOfKeys[character];
+        }
+
         const text = document.getElementById('noVNC_clipboard_text').value;
         Log.Debug(">> UI.clipboardSend: " + text.substr(0, 40) + "...");
-
         const textClip = text.split("");
-        function f(t) {
+
+        function fAzerty(t) {
+            const char = t.shift();
+            const code = convertCharacters(char);
+
+            const needs_shift = "AQWERTYUIOPASDFGHJLZXCVBNM1234567890/>%*._+?".indexOf(char) !== -1;
+            const needs_alt = "\\|@#{}[]`~".indexOf(char) !== -1;
+            if (code === undefined) return;
+            const keysym = code.charCodeAt();
+            const enter = '[\n]'.indexOf(code) !== -1;
+            const tab = '[\t]'.indexOf(code) !== -1;
+            const space = '[ ]'.indexOf(code) !== -1;
+
+            if (!needs_shift &&  !needs_alt && keysym === 68) {
+                // ( key
+                UI.rfb.sendKey(53, '53', true);
+                UI.rfb.sendKey(53, '53', false);
+            } else if (!needs_shift &&  !needs_alt && keysym === 83) {
+                // = key
+                UI.rfb.sendKey(47, '47', true);
+                UI.rfb.sendKey(47, '47', false);
+            } else if (!needs_shift &&  !needs_alt && keysym === 124) {
+                // " key
+                UI.rfb.sendKey(51, '51', true);
+                UI.rfb.sendKey(51, '51', false);
+            } else if (!needs_shift &&  !needs_alt && keysym === 33) {
+                // ! key
+                UI.rfb.sendKey(56, '56', true);
+                UI.rfb.sendKey(56, '56', false);
+            } else if (!needs_shift && needs_alt && keysym === 123) {
+                // { key
+                UI.rfb.sendKey(65027, "65027", true);
+                UI.rfb.sendKey(57, '57', true);
+                UI.rfb.sendKey(57, '57', false);
+                UI.rfb.sendKey(65027, "65027", false);
+            } else if (!needs_shift && needs_alt && keysym === 96) {
+                // ` key
+                UI.rfb.sendKey(65027, "65027", true);
+                UI.rfb.sendKey(92, '92', true);
+                UI.rfb.sendKey(92, '92', false);
+                UI.rfb.sendKey(65027, "65027", false);
+            } else if (!needs_shift && needs_alt && keysym === 126) {
+                // ~ key
+                UI.rfb.sendKey(65027, "65027", true);
+                UI.rfb.sendKey(47, '47', true);
+                UI.rfb.sendKey(47, '47', false);
+                UI.rfb.sendKey(65027, "65027", false);
+            } else if (!needs_shift && needs_alt && keysym === 125) {
+                // } key
+                UI.rfb.sendKey(65027, "65027", true);
+                UI.rfb.sendKey(48, '48', true);
+                UI.rfb.sendKey(48, '48', false);
+                UI.rfb.sendKey(65027, "65027", false);
+            } else if (!needs_shift && !needs_alt && keysym === 52) {
+                // & key
+                UI.rfb.sendKey(49, '49', true);
+                UI.rfb.sendKey(49, '49', false);
+            } else if (!needs_shift && !needs_alt && keysym === 57) {
+                // < key
+                UI.rfb.sendKey(KeyTable.IntlBackslash, 'IntlBackslash', true);
+                UI.rfb.sendKey(KeyTable.IntlBackslash, 'IntlBackslash', false);
+            } else if  (needs_shift && !needs_alt && keysym === 49) {
+                // > key
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", true);
+                UI.rfb.sendKey(KeyTable.IntlBackslash, 'IntlBackslash', true);
+                UI.rfb.sendKey(KeyTable.IntlBackslash, 'IntlBackslash', false);
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", false);
+            } else if  (needs_shift && !needs_alt && keysym === 42) {
+                // * key
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", true);
+                UI.rfb.sendKey(93, '93', true);
+                UI.rfb.sendKey(93, '93', false);
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", false);
+            } else if  (needs_shift && !needs_alt && keysym === 51) {
+                // % key
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", true);
+                UI.rfb.sendKey(39, '39', true);
+                UI.rfb.sendKey(39, '39', false);
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", false);
+            } else if (needs_shift && !needs_alt && keysym === 53) {
+                // m key
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", true);
+                UI.rfb.sendKey(59, '59', true);
+                UI.rfb.sendKey(59, '59', false);
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", false);
+            } else if (needs_shift && !needs_alt && keysym === 54) {
+                // slash key
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", true);
+                UI.rfb.sendKey(62, '62', true);
+                UI.rfb.sendKey(62, '62', false);
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", false);
+            } else if (!needs_shift && needs_alt && keysym === 57) {
+                // backslash
+                UI.rfb.sendKey(65027, "65027", true);
+                UI.rfb.sendKey(KeyTable.IntlBackslash, 'IntlBackslash', true);
+                UI.rfb.sendKey(KeyTable.IntlBackslash, 'IntlBackslash', false);
+                UI.rfb.sendKey(65027, "65027", false);
+            } else if (!needs_shift && !needs_alt && keysym === 81) {
+                // '
+                UI.rfb.sendKey(52, '52', true);
+                UI.rfb.sendKey(52, '52', false);
+            } else if (needs_shift && !needs_alt && keysym === 113) {
+                // ?
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", true);
+                UI.rfb.sendKey(77, '77', true);
+                UI.rfb.sendKey(77, '77', false);
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", false);
+            } else if (enter && !needs_alt && !needs_shift) {
+                // enter
+                UI.rfb.sendKey(65293, '65293', true);
+                UI.rfb.sendKey(65293, '65293', false);
+            } else if (tab && !needs_alt && !needs_shift) {
+                // tab
+                UI.rfb.sendKey(KeyTable.XK_Tab, 'XK_Tab', true);
+                UI.rfb.sendKey(KeyTable.XK_Tab, 'XK_Tab', false);
+            } else if (space && !needs_alt && !needs_shift) {
+                // space
+                UI.rfb.sendKey(32, '32', true);
+                UI.rfb.sendKey(32, '32', false);
+            } else if (needs_shift && !needs_alt && !enter && !space) {
+                // with shift
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", true);
+                UI.rfb.sendKey(keysym, code, true);
+                UI.rfb.sendKey(keysym, code, false);
+                UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", false);
+            } else if (needs_alt && !needs_shift && !enter && !space) {
+                // with alt
+                UI.rfb.sendKey(65027, "65027", true);
+                UI.rfb.sendKey(keysym, code, true);
+                UI.rfb.sendKey(keysym, code, false);
+                UI.rfb.sendKey(65027, "65027", false);
+            } else {
+                // normal letters
+                UI.rfb.sendKey(keysym, code, true);
+                UI.rfb.sendKey(keysym, code, false);
+            }
+
+
+            if (t.length > 0) {
+                setTimeout( () => {
+                    fAzerty(t);
+                }, 130);
+            } else {
+                UI.rfb.focus();
+            }
+        }
+
+        function fQuerty(t) {
             const character = t.shift();
             if (character === undefined) return;
-            let code = character.charCodeAt();
+            let keysym = character.charCodeAt();
             const needs_shift = '^[AZ]!@#$%^&*()_+{}:"<>?~|'.indexOf(character) !== -1;
             const enter = '[\n]'.indexOf(character) !== -1;
             const tab = '[\t]'.indexOf(character) !== -1;
-            if (code === 91) {
+            if (keysym === 91) {
                 UI.rfb.sendKey(KeyTable.XK_bracketleft, 'XK_bracketleft', true);
                 UI.rfb.sendKey(KeyTable.XK_bracketleft, 'XK_bracketleft', false);
 
-            } else if (code === 93) {
+            } else if (keysym === 93) {
                 UI.rfb.sendKey(KeyTable.XK_bracketright, 'XK_bracketright', true);
                 UI.rfb.sendKey(KeyTable.XK_bracketright, 'XK_bracketright', false);
             } else if (enter) {
@@ -1004,22 +1165,22 @@ const UI = {
                 if (needs_shift) {
                     UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", true);
                 }
-                UI.rfb.sendKey(code, "keysym", true);
-                UI.rfb.sendKey(code, "keysym", false);
+                UI.rfb.sendKey(keysym, "code", true);
+                UI.rfb.sendKey(keysym, "code", false);
                 if (needs_shift) {
                     UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", false);
                 }
             }
             if (t.length > 0) {
-                setTimeout( () => {
-                    f(t);
+                setTimeout(() => {
+                    fQuerty(t);
                 }, 50);
             } else {
                 UI.rfb.focus();
             }
         }
 
-        f(textClip);
+        UI.keyboardLayout === "qwerty" ? fQuerty(textClip) : fAzerty(textClip);
 
         Log.Debug("<< UI.clipboardSend");
     },
@@ -1073,7 +1234,7 @@ const UI = {
 
         UI.updateVisualState('connecting');
 
-        let url;
+        let url = '';
 
         url = UI.getSetting('encrypt') ? 'wss' : 'ws';
 
@@ -1081,7 +1242,7 @@ const UI = {
         if (port) {
             url += ':' + port;
         }
-        
+
         if (path.startsWith("?token")) {
             url += '/websockify' + path;
         } else {
@@ -1471,7 +1632,6 @@ const UI = {
     // This code is required since some browsers on Android are inconsistent in
     // sending keyCodes in the normal keyboard events when using on screen keyboards.
     keyInput(event) {
-
         if (!UI.rfb) return;
 
         const newValue = event.target.value;

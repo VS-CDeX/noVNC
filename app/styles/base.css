@@ -600,8 +600,15 @@ select:active {
 }
 #noVNC_power {
 }
+
 #noVNC_power_buttons {
   display: none;
+}
+
+.noVNC_select {
+  text-align: center;
+  padding-left: 15px;
+  padding-right: 15px;
 }
 
 #noVNC_power input[type=button] {
@@ -617,9 +624,10 @@ select:active {
   max-width: 100%;
 }
 
-.noVNC_close {
+.noVNC_rightSection {
   float: right;
 }
+
 
 /* Settings */
 #noVNC_settings {

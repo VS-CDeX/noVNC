@@ -213,8 +213,14 @@
                 <div id="noVNC_clipboard" class="noVNC_panel">
                     <div class="noVNC_heading">
                         <img alt="" src="app/images/clipboard.svg"> Clipboard
-                        <input type="button" class="noVNC_close" id="noVNC_clipboard_close_button" value="Close">
-
+                        <div class="noVNC_rightSection">
+                            <select class="noVNC_select" id="noVNC_keyboardLayout" name="keyboardLayout">
+                                <option value="">Keyboard</option>
+                                <option value="qwerty">querty</option>
+                                <option selected value="azerty">azerty</option>
+                            </select>
+                            <input type="button" id="noVNC_clipboard_close_button" value="Close">
+                        </div>
                     </div>
                     <textarea id="noVNC_clipboard_text" rows=5></textarea>
                     <br>

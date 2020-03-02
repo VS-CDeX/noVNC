@@ -350,7 +350,6 @@ export default class RFB extends EventTargetMixin {
     // followed by an up key.
     sendKey(keysym, code, down) {
         if (this._rfb_connection_state !== 'connected' || this._viewOnly) { return; }
-
         if (down === undefined) {
             this.sendKey(keysym, code, true);
             this.sendKey(keysym, code, false);
@@ -358,6 +357,7 @@ export default class RFB extends EventTargetMixin {
         }
 
         const scancode = XtScancode[code];
+        // console.log(scancode, 'scancode');
 
         if (this._qemuExtKeyEventSupported && scancode) {
             // 0 is NoSymbol
