@@ -10,19 +10,3 @@ recordings
 *.swp
 *~
 noVNC-*.tgz
-
-# IDE FILES #
-######################
-
-/.idea/*
-/.vscode
-
-# OS generated files #
-######################
-.history
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-.directory

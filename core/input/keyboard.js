@@ -1,6 +1,6 @@
 /*
  * noVNC: HTML5 VNC client
- * Copyright (C) 2018 The noVNC Authors
+ * Copyright (C) 2019 The noVNC authors
  * Licensed under MPL 2.0 or any later version (see LICENSE.txt)
  */
 
@@ -20,16 +20,13 @@ export default class Keyboard {
 
         this._keyDownList = {};         // List of depressed keys
                                         // (even if they are happy)
-        this._pendingKey = null;        // Key waiting for keypress
         this._altGrArmed = false;       // Windows AltGr detection
 
         // keep these here so we can refer to them later
         this._eventHandlers = {
             'keyup': this._handleKeyUp.bind(this),
             'keydown': this._handleKeyDown.bind(this),
-            'keypress': this._handleKeyPress.bind(this),
             'blur': this._allKeysUp.bind(this),
-            'checkalt': this._checkAlt.bind(this),
         };
 
         // ===== EVENT HANDLERS =====
@@ -39,7 +36,7 @@ export default class Keyboard {
 
     // ===== PRIVATE METHODS =====
 
-    _sendKeyEvent(keysym, code, down, numlock = null) {
+    _sendKeyEvent(keysym, code, down, numlock = null, capslock = null) {
         if (down) {
             this._keyDownList[code] = keysym;
         } else {
@@ -51,8 +48,9 @@ export default class Keyboard {
         }
 
         Log.Debug("onkeyevent " + (down ? "down" : "up") +
-                  ", keysym: " + keysym, ", code: " + code);
-        this.onkeyevent(keysym, code, down, numlock);
+                  ", keysym: " + keysym, ", code: " + code +
+                  ", numlock: " + numlock + ", capslock: " + capslock);
+        this.onkeyevent(keysym, code, down, numlock, capslock);
     }
 
     _getKeyCode(e) {
@@ -62,9 +60,7 @@ export default class Keyboard {
         }
 
         // Unstable, but we don't have anything else to go on
-        // (don't use it for 'keypress' events thought since
-        // WebKit sets it to the same as charCode)
-        if (e.keyCode && (e.type !== 'keypress')) {
+        if (e.keyCode) {
             // 229 is used for composition events
             if (e.keyCode !== 229) {
                 return 'Platform' + e.keyCode;
@@ -92,6 +88,7 @@ export default class Keyboard {
         const code = this._getKeyCode(e);
         let keysym = KeyboardUtil.getKeysym(e);
         let numlock = e.getModifierState('NumLock');
+        let capslock = e.getModifierState('CapsLock');
 
         // getModifierState for NumLock is not supported on mac and ios and always returns false.
         // Set to null to indicate unknown/unsupported instead.
@@ -119,21 +116,19 @@ export default class Keyboard {
                 //        key to "AltGraph".
                 keysym = KeyTable.XK_ISO_Level3_Shift;
             } else {
-                this._sendKeyEvent(KeyTable.XK_Control_L, "ControlLeft", true, numlock);
+                this._sendKeyEvent(KeyTable.XK_Control_L, "ControlLeft", true, numlock, capslock);
             }
         }
 
         // We cannot handle keys we cannot track, but we also need
         // to deal with virtual keyboards which omit key info
-        // (iOS omits tracking info on keyup events, which forces us to
-        // special treat that platform here)
-        if ((code === 'Unidentified') || browser.isIOS()) {
+        if (code === 'Unidentified') {
             if (keysym) {
                 // If it's a virtual keyboard then it should be
                 // sufficient to just send press and release right
                 // after each other
-                this._sendKeyEvent(keysym, code, true, numlock);
-                this._sendKeyEvent(keysym, code, false, numlock);
+                this._sendKeyEvent(keysym, code, true, numlock, capslock);
+                this._sendKeyEvent(keysym, code, false, numlock, capslock);
             }
 
             stopEvent(e);
@@ -144,7 +139,7 @@ export default class Keyboard {
         // keys around a bit to make things more sane for the remote
         // server. This method is used by RealVNC and TigerVNC (and
         // possibly others).
-        if (browser.isMac()) {
+        if (browser.isMac() || browser.isIOS()) {
             switch (keysym) {
                 case KeyTable.XK_Super_L:
                     keysym = KeyTable.XK_Alt_L;
@@ -167,106 +162,53 @@ export default class Keyboard {
             keysym = this._keyDownList[code];
         }
 
-        // macOS doesn't send proper key events for modifiers, only
-        // state change events. That gets extra confusing for CapsLock
-        // which toggles on each press, but not on release. So pretend
-        // it was a quick press and release of the button.
-        if (browser.isMac() && (code === 'CapsLock')) {
-            this._sendKeyEvent(KeyTable.XK_Caps_Lock, 'CapsLock', true, numlock);
-            this._sendKeyEvent(KeyTable.XK_Caps_Lock, 'CapsLock', false, numlock);
+        // macOS doesn't send proper key releases if a key is pressed
+        // while meta is held down
+        if ((browser.isMac() || browser.isIOS()) &&
+            (e.metaKey && code !== 'MetaLeft' && code !== 'MetaRight')) {
+            this._sendKeyEvent(keysym, code, true, numlock, capslock);
+            this._sendKeyEvent(keysym, code, false, numlock, capslock);
             stopEvent(e);
             return;
         }
 
-        // If this is a legacy browser then we'll need to wait for
-        // a keypress event as well
-        // (IE and Edge has a broken KeyboardEvent.key, so we can't
-        // just check for the presence of that field)
-        if (!keysym && (!e.key || browser.isIE() || browser.isEdge())) {
-            this._pendingKey = code;
-            // However we might not get a keypress event if the key
-            // is non-printable, which needs some special fallback
-            // handling
-            setTimeout(this._handleKeyPressTimeout.bind(this), 10, e);
+        // macOS doesn't send proper key events for modifiers, only
+        // state change events. That gets extra confusing for CapsLock
+        // which toggles on each press, but not on release. So pretend
+        // it was a quick press and release of the button.
+        if ((browser.isMac() || browser.isIOS()) && (code === 'CapsLock')) {
+            this._sendKeyEvent(KeyTable.XK_Caps_Lock, 'CapsLock', true, numlock, capslock);
+            this._sendKeyEvent(KeyTable.XK_Caps_Lock, 'CapsLock', false, numlock, capslock);
+            stopEvent(e);
             return;
         }
 
-        this._pendingKey = null;
+        // Windows doesn't send proper key releases for a bunch of
+        // Japanese IM keys so we have to fake the release right away
+        const jpBadKeys = [ KeyTable.XK_Zenkaku_Hankaku,
+                            KeyTable.XK_Eisu_toggle,
+                            KeyTable.XK_Katakana,
+                            KeyTable.XK_Hiragana,
+                            KeyTable.XK_Romaji ];
+        if (browser.isWindows() && jpBadKeys.includes(keysym)) {
+            this._sendKeyEvent(keysym, code, true, numlock, capslock);
+            this._sendKeyEvent(keysym, code, false, numlock, capslock);
+            stopEvent(e);
+            return;
+        }
+
         stopEvent(e);
 
         // Possible start of AltGr sequence? (see above)
         if ((code === "ControlLeft") && browser.isWindows() &&
             !("ControlLeft" in this._keyDownList)) {
             this._altGrArmed = true;
-            this._altGrTimeout = setTimeout(this._handleAltGrTimeout.bind(this), 100);
+            this._altGrTimeout = setTimeout(this._interruptAltGrSequence.bind(this), 100);
             this._altGrCtrlTime = e.timeStamp;
             return;
         }
 
-        this._sendKeyEvent(keysym, code, true, numlock);
-    }
-
-    // Legacy event for browsers without code/key
-    _handleKeyPress(e) {
-        stopEvent(e);
-
-        // Are we expecting a keypress?
-        if (this._pendingKey === null) {
-            return;
-        }
-
-        let code = this._getKeyCode(e);
-        const keysym = KeyboardUtil.getKeysym(e);
-
-        // The key we were waiting for?
-        if ((code !== 'Unidentified') && (code != this._pendingKey)) {
-            return;
-        }
-
-        code = this._pendingKey;
-        this._pendingKey = null;
-
-        if (!keysym) {
-            Log.Info('keypress with no keysym:', e);
-            return;
-        }
-
-        this._sendKeyEvent(keysym, code, true);
-    }
-
-    _handleKeyPressTimeout(e) {
-        // Did someone manage to sort out the key already?
-        if (this._pendingKey === null) {
-            return;
-        }
-
-        let keysym;
-
-        const code = this._pendingKey;
-        this._pendingKey = null;
-
-        // We have no way of knowing the proper keysym with the
-        // information given, but the following are true for most
-        // layouts
-        if ((e.keyCode >= 0x30) && (e.keyCode <= 0x39)) {
-            // Digit
-            keysym = e.keyCode;
-        } else if ((e.keyCode >= 0x41) && (e.keyCode <= 0x5a)) {
-            // Character (A-Z)
-            let char = String.fromCharCode(e.keyCode);
-            // A feeble attempt at the correct case
-            if (e.shiftKey) {
-                char = char.toUpperCase();
-            } else {
-                char = char.toLowerCase();
-            }
-            keysym = char.charCodeAt();
-        } else {
-            // Unknown, give up
-            keysym = 0;
-        }
-
-        this._sendKeyEvent(keysym, code, true);
+        this._sendKeyEvent(keysym, code, true, numlock, capslock);
     }
 
     _handleKeyUp(e) {
@@ -276,54 +218,51 @@ export default class Keyboard {
 
         // We can't get a release in the middle of an AltGr sequence, so
         // abort that detection
-        if (this._altGrArmed) {
-            this._altGrArmed = false;
-            clearTimeout(this._altGrTimeout);
-            this._sendKeyEvent(KeyTable.XK_Control_L, "ControlLeft", true);
-        }
+        this._interruptAltGrSequence();
 
         // See comment in _handleKeyDown()
-        if (browser.isMac() && (code === 'CapsLock')) {
+        if ((browser.isMac() || browser.isIOS()) && (code === 'CapsLock')) {
             this._sendKeyEvent(KeyTable.XK_Caps_Lock, 'CapsLock', true);
             this._sendKeyEvent(KeyTable.XK_Caps_Lock, 'CapsLock', false);
             return;
         }
 
         this._sendKeyEvent(this._keyDownList[code], code, false);
+
+        // Windows has a rather nasty bug where it won't send key
+        // release events for a Shift button if the other Shift is still
+        // pressed
+        if (browser.isWindows() && ((code === 'ShiftLeft') ||
+                                    (code === 'ShiftRight'))) {
+            if ('ShiftRight' in this._keyDownList) {
+                this._sendKeyEvent(this._keyDownList['ShiftRight'],
+                                   'ShiftRight', false);
+            }
+            if ('ShiftLeft' in this._keyDownList) {
+                this._sendKeyEvent(this._keyDownList['ShiftLeft'],
+                                   'ShiftLeft', false);
+            }
+        }
     }
 
-    _handleAltGrTimeout() {
-        this._altGrArmed = false;
-        clearTimeout(this._altGrTimeout);
-        this._sendKeyEvent(KeyTable.XK_Control_L, "ControlLeft", true);
+    _interruptAltGrSequence() {
+        if (this._altGrArmed) {
+            this._altGrArmed = false;
+            clearTimeout(this._altGrTimeout);
+            this._sendKeyEvent(KeyTable.XK_Control_L, "ControlLeft", true);
+        }
     }
 
     _allKeysUp() {
         Log.Debug(">> Keyboard.allKeysUp");
+
+        // Prevent control key being processed after losing focus.
+        this._interruptAltGrSequence();
+
         for (let code in this._keyDownList) {
             this._sendKeyEvent(this._keyDownList[code], code, false);
         }
         Log.Debug("<< Keyboard.allKeysUp");
-    }
-
-    // Firefox Alt workaround, see below
-    _checkAlt(e) {
-        if (e.altKey) {
-            return;
-        }
-
-        const target = this._target;
-        const downList = this._keyDownList;
-        ['AltLeft', 'AltRight'].forEach((code) => {
-            if (!(code in downList)) {
-                return;
-            }
-
-            const event = new KeyboardEvent('keyup',
-                                            { key: downList[code],
-                                              code: code });
-            target.dispatchEvent(event);
-        });
     }
 
     // ===== PUBLIC METHODS =====
@@ -333,23 +272,9 @@ export default class Keyboard {
 
         this._target.addEventListener('keydown', this._eventHandlers.keydown);
         this._target.addEventListener('keyup', this._eventHandlers.keyup);
-        this._target.addEventListener('keypress', this._eventHandlers.keypress);
 
         // Release (key up) if window loses focus
         window.addEventListener('blur', this._eventHandlers.blur);
-
-        // Firefox has broken handling of Alt, so we need to poll as
-        // best we can for releases (still doesn't prevent the menu
-        // from popping up though as we can't call preventDefault())
-        if (browser.isWindows() && browser.isFirefox()) {
-            const handler = this._eventHandlers.checkalt;
-            ['mousedown', 'mouseup', 'mousemove', 'wheel',
-             'touchstart', 'touchend', 'touchmove',
-             'keydown', 'keyup'].forEach(type =>
-                document.addEventListener(type, handler,
-                                          { capture: true,
-                                            passive: true }));
-        }
 
         //Log.Debug("<< Keyboard.grab");
     }
@@ -357,16 +282,8 @@ export default class Keyboard {
     ungrab() {
         //Log.Debug(">> Keyboard.ungrab");
 
-        if (browser.isWindows() && browser.isFirefox()) {
-            const handler = this._eventHandlers.checkalt;
-            ['mousedown', 'mouseup', 'mousemove', 'wheel',
-             'touchstart', 'touchend', 'touchmove',
-             'keydown', 'keyup'].forEach(type => document.removeEventListener(type, handler));
-        }
-
         this._target.removeEventListener('keydown', this._eventHandlers.keydown);
         this._target.removeEventListener('keyup', this._eventHandlers.keyup);
-        this._target.removeEventListener('keypress', this._eventHandlers.keypress);
         window.removeEventListener('blur', this._eventHandlers.blur);
 
         // Release (key up) all keys that are in a down state
