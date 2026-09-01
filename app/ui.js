@@ -977,13 +977,13 @@ const UI = {
 
     writeText() {
         const text = document.getElementById('noVNC_clipboard_text').value;
-        Log.Debug(">> UI.clipboardSend: " + text.substr(0, 40) + "...");
+        Log.Debug(">> UI.clipboardSend: " + text.length + " characters");
         const textClip = text.trim().split("");
         function f(t) {
             const character = t.shift();
             if (character === undefined) return;
             let code = character.charCodeAt();
-            const needs_shift = '^[AZ]!@#$%^&*()_+{}:"<>?~|'.indexOf(character) !== -1;
+            const needs_shift = /^[A-Z]$/.test(character) || '~!@#$%^&*()_+{}|:"<>?'.indexOf(character) !== -1;
             const enter = '[\n]'.indexOf(character) !== -1;
             const tab = '[\t]'.indexOf(character) !== -1;
             if (code === 91) {
