@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   xmlns="http://www.w3.org/2000/svg"
+   width="25"
+   height="25"
+   viewBox="0 0 25 25"
+   version="1.1"
+   id="svg-capslock">
+  <path
+     d="M 12.5,2.5 21,11 H 16.5 V 17.5 H 8.5 V 11 H 4 Z"
+     style="fill:#ffffff;fill-opacity:1;stroke:none"
+     id="path-capslock-arrow" />
+  <rect
+     x="8.5"
+     y="19.5"
+     width="8"
+     height="3"
+     style="fill:#ffffff;fill-opacity:1;stroke:none"
+     id="path-capslock-bar" />
+</svg>

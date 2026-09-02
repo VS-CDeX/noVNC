@@ -277,6 +277,10 @@ const UI = {
             .addEventListener('click', UI.toggleWindows);
         document.getElementById("noVNC_toggle_alt_button")
             .addEventListener('click', UI.toggleAlt);
+        document.getElementById("noVNC_toggle_shift_button")
+            .addEventListener('click', UI.toggleShift);
+        document.getElementById("noVNC_send_capslock_button")
+            .addEventListener('click', UI.sendCapsLock);
         document.getElementById("noVNC_send_tab_button")
             .addEventListener('click', UI.sendTab);
         document.getElementById("noVNC_send_esc_button")
@@ -977,13 +981,13 @@ const UI = {
 
     writeText() {
         const text = document.getElementById('noVNC_clipboard_text').value;
-        Log.Debug(">> UI.clipboardSend: " + text.substr(0, 40) + "...");
+        Log.Debug(">> UI.clipboardSend: " + text.length + " characters");
         const textClip = text.trim().split("");
         function f(t) {
             const character = t.shift();
             if (character === undefined) return;
             let code = character.charCodeAt();
-            const needs_shift = '^[AZ]!@#$%^&*()_+{}:"<>?~|'.indexOf(character) !== -1;
+            const needs_shift = /^[A-Z]$/.test(character) || '~!@#$%^&*()_+{}|:"<>?'.indexOf(character) !== -1;
             const enter = '[\n]'.indexOf(character) !== -1;
             const tab = '[\t]'.indexOf(character) !== -1;
             if (code === 91) {
@@ -1099,6 +1103,7 @@ const UI = {
         UI.rfb.addEventListener("clipboard", UI.clipboardReceive);
         UI.rfb.addEventListener("bell", UI.bell);
         UI.rfb.addEventListener("desktopname", UI.updateDesktopName);
+        UI.rfb.addEventListener("ledstate", UI.updateCapsLock);
         UI.rfb.clipViewport = UI.getSetting('view_clip');
         UI.rfb.scaleViewport = true;
         // UI.rfb.scaleViewport = UI.getSetting('resize') === 'scale';
@@ -1171,6 +1176,9 @@ const UI = {
         UI.connected = false;
 
         UI.rfb = undefined;
+        // Guest lock state is unknown without a connection
+        document.getElementById('noVNC_send_capslock_button')
+            .classList.remove("noVNC_selected");
 
         if (!e.detail.clean) {
             UI.updateVisualState('disconnected');
@@ -1600,6 +1608,28 @@ const UI = {
             UI.rfb.sendKey(KeyTable.XK_Alt_L, "AltLeft", true);
             btn.classList.add("noVNC_selected");
         }
+    },
+
+    toggleShift() {
+        const btn = document.getElementById('noVNC_toggle_shift_button');
+        if (btn.classList.contains("noVNC_selected")) {
+            UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", false);
+            btn.classList.remove("noVNC_selected");
+        } else {
+            UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", true);
+            btn.classList.add("noVNC_selected");
+        }
+    },
+
+    sendCapsLock() {
+        UI.rfb.sendKey(KeyTable.XK_Caps_Lock, "CapsLock");
+    },
+
+    // The highlight mirrors the Caps Lock LED reported by the server,
+    // not a key held by the button like the modifier toggles above.
+    updateCapsLock(e) {
+        document.getElementById('noVNC_send_capslock_button')
+            .classList.toggle("noVNC_selected", e.detail.capsLock);
     },
 
     sendCtrlAltDel() {

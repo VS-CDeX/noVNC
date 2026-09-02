@@ -106,6 +106,10 @@ protocol stream.
   - The `capabilities` event is fired when `RFB.capabilities` is
     updated.
 
+[`ledstate`](#ledstate)
+  - The `ledstate` event is fired when the server reports the state
+    of the remote lock keys.
+
 ### Methods
 
 [`RFB.disconnect()`](#rfbdisconnect)
@@ -250,6 +254,12 @@ which is a `DOMString` specifying the new name.
 The `capabilities` event is fired whenever an entry is added or removed
 from `RFB.capabilities`. The `detail` property is an `Object` with the
 property `capabilities` containing the new value of `RFB.capabilities`.
+
+#### ledstate
+
+The `ledstate` event is fired when the server reports the state of the
+remote lock keys (QEMU LED state extension). The `detail` property is
+an `Object` with the `boolean` properties `capsLock` and `numLock`.
 
 #### RFB.disconnect()
 

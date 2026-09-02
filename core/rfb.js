@@ -176,6 +176,7 @@ export default class RFB extends EventTargetMixin {
 
         this._keyboard = new Keyboard(this._canvas);
         this._keyboard.onkeyevent = this._handleKeyEvent.bind(this);
+        this._remoteNumLock = null; // Null indicates unknown or irrelevant
 
         this._mouse = new Mouse(this._canvas);
         this._mouse.onmousebutton = this._handleMouseButton.bind(this);
@@ -715,7 +716,23 @@ export default class RFB extends EventTargetMixin {
         }
     }
 
-    _handleKeyEvent(keysym, code, down) {
+    _handleKeyEvent(keysym, code, down, numlock) {
+        // If remote state of numlock is known, and it doesn't match the local led state of
+        // the keyboard, we send a numlock keypress first to bring it into sync.
+        // If we just pressed NumLock, or we toggled it remotely due to it being out of sync
+        // we clear the remote state so that we don't send duplicate or spurious fixes,
+        // since it may take some time to receive the new remote NumLock state.
+        // Caps Lock is deliberately not synced: the guest keeps its own state, which
+        // the physical key and the toolbar button toggle directly.
+        if (code == 'NumLock' && down) {
+            this._remoteNumLock = null;
+        }
+        if (this._remoteNumLock !== null && numlock !== null && this._remoteNumLock !== numlock && down) {
+            Log.Debug("Fixing remote num lock");
+            this.sendKey(KeyTable.XK_Num_Lock, 'NumLock', true);
+            this.sendKey(KeyTable.XK_Num_Lock, 'NumLock', false);
+            this._remoteNumLock = null;
+        }
         this.sendKey(keysym, code, down);
     }
 
@@ -1240,6 +1257,7 @@ export default class RFB extends EventTargetMixin {
         encs.push(encodings.pseudoEncodingDesktopSize);
         encs.push(encodings.pseudoEncodingLastRect);
         encs.push(encodings.pseudoEncodingQEMUExtendedKeyEvent);
+        encs.push(encodings.pseudoEncodingQEMULedEvent);
         encs.push(encodings.pseudoEncodingExtendedDesktopSize);
         encs.push(encodings.pseudoEncodingXvp);
         encs.push(encodings.pseudoEncodingFence);
@@ -1517,6 +1535,9 @@ export default class RFB extends EventTargetMixin {
             case encodings.pseudoEncodingExtendedDesktopSize:
                 return this._handleExtendedDesktopSize();
 
+            case encodings.pseudoEncodingQEMULedEvent:
+                return this._handleLedEvent();
+
             default:
                 return this._handleDataRect();
         }
@@ -1555,6 +1576,24 @@ export default class RFB extends EventTargetMixin {
         }
 
         this._updateCursor(rgba, hotx, hoty, w, h);
+
+        return true;
+    }
+
+    _handleLedEvent() {
+        if (this._sock.rQwait("LED Status", 1)) {
+            return false;
+        }
+
+        let data = this._sock.rQshift8();
+        // ScrollLock state can be retrieved with data & 1. This is currently not needed.
+        let numLock = data & 2 ? true : false;
+        let capsLock = data & 4 ? true : false;
+        this._remoteNumLock = numLock;
+
+        this.dispatchEvent(new CustomEvent(
+            "ledstate",
+            { detail: { capsLock: capsLock, numLock: numLock } }));
 
         return true;
     }
