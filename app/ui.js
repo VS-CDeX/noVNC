@@ -20,7 +20,6 @@ import * as WebUtil from "./webutil.js";
 
 const PAGE_TITLE = "noVNC";
 
-const LINGUAS = ["cs", "de", "el", "es", "fr", "hr", "hu", "it", "ja", "ko", "nl", "pl", "pt_BR", "ru", "sv", "tr", "zh_CN", "zh_TW"];
 
 const UI = {
 
@@ -57,7 +56,9 @@ const UI = {
 
         // Set up translations
         try {
-            await l10n.setup(LINGUAS, "app/locale/");
+            // The console is served in English only; pass the LINGUAS list
+            // from po/Makefile here to enable the upstream translations.
+            await l10n.setup([], "app/locale/");
         } catch (err) {
             Log.Error("Failed to load translations: " + err);
         }
@@ -117,6 +118,7 @@ const UI = {
         UI.addControlbarHandlers();
         UI.addTouchSpecificHandlers();
         UI.addExtraKeysHandlers();
+        UI.addSpecialKeysHandlers();
         UI.addMachineHandlers();
         UI.addConnectionControlHandlers();
         UI.addClipboardHandlers();
@@ -300,12 +302,25 @@ const UI = {
             .addEventListener('click', UI.toggleWindows);
         document.getElementById("noVNC_toggle_alt_button")
             .addEventListener('click', UI.toggleAlt);
+        document.getElementById("noVNC_toggle_shift_button")
+            .addEventListener('click', UI.toggleShift);
+        document.getElementById("noVNC_send_capslock_button")
+            .addEventListener('click', UI.sendCapsLock);
         document.getElementById("noVNC_send_tab_button")
             .addEventListener('click', UI.sendTab);
         document.getElementById("noVNC_send_esc_button")
             .addEventListener('click', UI.sendEsc);
         document.getElementById("noVNC_send_ctrl_alt_del_button")
             .addEventListener('click', UI.sendCtrlAltDel);
+    },
+
+    addSpecialKeysHandlers() {
+        document.getElementById("noVNC_toggle_special_keys_button")
+            .addEventListener('click', UI.toggleSpecialKeys);
+        for (let i = 1; i <= 12; i++) {
+            document.getElementById("noVNC_send_f" + i + "_button")
+                .addEventListener('click', () => UI.sendKey(KeyTable["XK_F" + i], "F" + i));
+        }
     },
 
     addMachineHandlers() {
@@ -338,8 +353,12 @@ const UI = {
     addClipboardHandlers() {
         document.getElementById("noVNC_clipboard_button")
             .addEventListener('click', UI.toggleClipboardPanel);
-        document.getElementById("noVNC_clipboard_text")
-            .addEventListener('change', UI.clipboardSend);
+        document.getElementById("noVNC_clipboard_send_button")
+            .addEventListener('click', UI.writeText);
+        document.getElementById("noVNC_clipboard_clear_button")
+            .addEventListener('click', UI.clipboardClear);
+        document.getElementById("noVNC_clipboard_close_button")
+            .addEventListener('click', UI.clipboardClose);
     },
 
     // Add a call to save settings when the element changes,
@@ -384,11 +403,11 @@ const UI = {
     addFullscreenHandlers() {
         document.getElementById("noVNC_fullscreen_button")
             .addEventListener('click', UI.toggleFullscreen);
-
-        window.addEventListener('fullscreenchange', UI.updateFullscreenButton);
-        window.addEventListener('mozfullscreenchange', UI.updateFullscreenButton);
-        window.addEventListener('webkitfullscreenchange', UI.updateFullscreenButton);
-        window.addEventListener('msfullscreenchange', UI.updateFullscreenButton);
+        try {
+            window.parent.document.addEventListener('fullscreenchange', UI.updateFullscreenButton);
+        } catch (e) {
+            // cross-origin embedding page: no state feedback
+        }
     },
 
 /* ------^-------
@@ -441,9 +460,6 @@ const UI = {
             UI.disableSetting('port');
             UI.disableSetting('path');
             UI.disableSetting('repeaterID');
-
-            // Hide the controlbar after 2 seconds
-            UI.closeControlbarTimeout = setTimeout(UI.closeControlbar, 2000);
         } else {
             UI.enableSetting('encrypt');
             UI.enableSetting('shared');
@@ -867,6 +883,7 @@ const UI = {
         UI.closePowerPanel();
         UI.closeClipboardPanel();
         UI.closeExtraKeys();
+        UI.closeSpecialKeys();
     },
 
 /* ------^-------
@@ -991,20 +1008,82 @@ const UI = {
             UI.closeClipboardPanel();
         } else {
             UI.openClipboardPanel();
+            UI.textareaFocus();
         }
     },
 
-    clipboardReceive(e) {
-        Log.Debug(">> UI.clipboardReceive: " + e.detail.text.substr(0, 40) + "...");
-        document.getElementById('noVNC_clipboard_text').value = e.detail.text;
-        Log.Debug("<< UI.clipboardReceive");
+    textareaFocus() {
+        // wait for the panel's opening transition
+        setTimeout(() => {
+            document.getElementById('noVNC_clipboard_text').focus();
+        }, 250);
     },
 
-    clipboardSend() {
+    clipboardClear() {
+        document.getElementById('noVNC_clipboard_text').value = "";
+        UI.rfb.clipboardPasteFrom("");
+    },
+
+    clipboardClose() {
+        if (document.getElementById('noVNC_clipboard_button')
+            .classList.contains("noVNC_selected")) {
+            UI.closeClipboardPanel();
+        }
+    },
+
+    // The guest has no clipboard integration, so the text is typed
+    // into the session key by key instead of being sent as clipboard.
+    writeText() {
         const text = document.getElementById('noVNC_clipboard_text').value;
-        Log.Debug(">> UI.clipboardSend: " + text.substr(0, 40) + "...");
-        UI.rfb.clipboardPasteFrom(text);
-        Log.Debug("<< UI.clipboardSend");
+        Log.Debug(">> UI.writeText: " + text.length + " characters");
+        const sendButton = document.getElementById('noVNC_clipboard_send_button');
+        const shiftButton = document.getElementById('noVNC_toggle_shift_button');
+
+        // Type the text as written: release a held Shift and mind the
+        // guest's Caps Lock (mirrored by the Caps Lock button highlight)
+        if (shiftButton.classList.contains("noVNC_selected")) {
+            UI.toggleShift();
+        }
+        const capsLock = document.getElementById('noVNC_send_capslock_button')
+            .classList.contains("noVNC_selected");
+
+        const textClip = Array.from(text.trim().replace(/\r\n?/g, "\n"));
+        sendButton.disabled = true;
+        // the guest Caps Lock must not change under the text being typed
+        UI.rfb.capsLockSync = false;
+        function f(t) {
+            if (t.length === 0 || !UI.rfb) {
+                sendButton.disabled = false;
+                if (UI.rfb) {
+                    UI.rfb.capsLockSync = true;
+                    UI.rfb.focus();
+                }
+                return;
+            }
+            const character = t.shift();
+            if (character === '\n') {
+                UI.rfb.sendKey(KeyTable.XK_Return, "Enter");
+            } else if (character === '\t') {
+                UI.rfb.sendKey(KeyTable.XK_Tab, "Tab");
+            } else {
+                const upper = /^[A-Z]$/.test(character);
+                const lower = /^[a-z]$/.test(character);
+                const needsShift = (upper || lower) ? (upper !== capsLock)
+                    : '~!@#$%^&*()_+{}|:"<>?'.indexOf(character) !== -1;
+                if (needsShift) {
+                    UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", true);
+                }
+                UI.rfb.sendKey(keysyms.lookup(character.codePointAt(0)), "keysym");
+                if (needsShift) {
+                    UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", false);
+                }
+            }
+            setTimeout(() => f(t), 50);
+        }
+
+        f(textClip);
+
+        Log.Debug("<< UI.writeText");
     },
 
 /* ------^-------
@@ -1033,6 +1112,7 @@ const UI = {
         const host = UI.getSetting('host');
         const port = UI.getSetting('port');
         const path = UI.getSetting('path');
+        WebUtil.createToken();
 
         if (typeof password === 'undefined') {
             password = UI.getSetting('password');
@@ -1072,6 +1152,13 @@ const UI = {
             url.protocol = (window.location.protocol === "https:") ? 'wss:' : 'ws:';
         }
 
+        // nova-novncproxy passes the console token as `path=?token=...`;
+        // the reverse proxy expects the WebSocket under /websockify
+        if (path.startsWith("?token")) {
+            url.pathname = "/websockify";
+            url.search = path;
+        }
+
         try {
             UI.rfb = new RFB(document.getElementById('noVNC_container'),
                              url.href,
@@ -1092,9 +1179,9 @@ const UI = {
         UI.rfb.addEventListener("securityfailure", UI.securityFailed);
         UI.rfb.addEventListener("clippingviewport", UI.updateViewDrag);
         UI.rfb.addEventListener("capabilities", UI.updatePowerButton);
-        UI.rfb.addEventListener("clipboard", UI.clipboardReceive);
         UI.rfb.addEventListener("bell", UI.bell);
         UI.rfb.addEventListener("desktopname", UI.updateDesktopName);
+        UI.rfb.addEventListener("ledstate", UI.updateCapsLock);
         UI.rfb.clipViewport = UI.getSetting('view_clip');
         UI.rfb.scaleViewport = UI.getSetting('resize') === 'scale';
         UI.rfb.resizeSession = UI.getSetting('resize') === 'remote';
@@ -1170,6 +1257,9 @@ const UI = {
         UI.connected = false;
 
         UI.rfb = undefined;
+        // Guest lock state is unknown without a connection
+        document.getElementById('noVNC_send_capslock_button')
+            .classList.remove("noVNC_selected");
 
         if (!e.detail.clean) {
             UI.updateVisualState('disconnected');
@@ -1320,45 +1410,33 @@ const UI = {
  *   FULLSCREEN
  * ------v------*/
 
-    toggleFullscreen() {
-        if (document.fullscreenElement || // alternative standard method
-            document.mozFullScreenElement || // currently working methods
-            document.webkitFullscreenElement ||
-            document.msFullscreenElement) {
-            if (document.exitFullscreen) {
-                document.exitFullscreen();
-            } else if (document.mozCancelFullScreen) {
-                document.mozCancelFullScreen();
-            } else if (document.webkitExitFullscreen) {
-                document.webkitExitFullscreen();
-            } else if (document.msExitFullscreen) {
-                document.msExitFullscreen();
-            }
-        } else {
-            if (document.documentElement.requestFullscreen) {
-                document.documentElement.requestFullscreen();
-            } else if (document.documentElement.mozRequestFullScreen) {
-                document.documentElement.mozRequestFullScreen();
-            } else if (document.documentElement.webkitRequestFullscreen) {
-                document.documentElement.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
-            } else if (document.body.msRequestFullscreen) {
-                document.body.msRequestFullscreen();
-            }
+    // The console runs in an iframe; the embedding page owns the
+    // fullscreen state and listens for this message. A same-origin page
+    // exposes its real state, otherwise the button keeps its own.
+    parentFullscreenState() {
+        if (window.parent === window) {
+            return undefined;
         }
-        UI.updateFullscreenButton();
+        try {
+            return window.parent.document.fullscreenElement !== null;
+        } catch (e) {
+            return undefined;
+        }
+    },
+
+    toggleFullscreen() {
+        const btn = document.getElementById('noVNC_fullscreen_button');
+        let isFullscreen = UI.parentFullscreenState();
+        if (isFullscreen === undefined) {
+            isFullscreen = btn.classList.contains("noVNC_selected");
+        }
+        btn.classList.toggle("noVNC_selected", !isFullscreen);
+        window.parent.postMessage(!isFullscreen, '*');
     },
 
     updateFullscreenButton() {
-        if (document.fullscreenElement || // alternative standard method
-            document.mozFullScreenElement || // currently working methods
-            document.webkitFullscreenElement ||
-            document.msFullscreenElement ) {
-            document.getElementById('noVNC_fullscreen_button')
-                .classList.add("noVNC_selected");
-        } else {
-            document.getElementById('noVNC_fullscreen_button')
-                .classList.remove("noVNC_selected");
-        }
+        document.getElementById('noVNC_fullscreen_button')
+            .classList.toggle("noVNC_selected", UI.parentFullscreenState() === true);
     },
 
 /* ------^-------
@@ -1728,9 +1806,35 @@ const UI = {
         UI.idleControlbar();
     },
 
+    toggleShift() {
+        const btn = document.getElementById('noVNC_toggle_shift_button');
+        if (btn.classList.contains("noVNC_selected")) {
+            UI.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", false);
+            btn.classList.remove("noVNC_selected");
+        } else {
+            UI.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", true);
+            btn.classList.add("noVNC_selected");
+        }
+    },
+
+    sendCapsLock() {
+        UI.rfb.toggleCapsLock();
+        UI.focusScreen();
+    },
+
+    // The highlight mirrors the Caps Lock LED reported by the server,
+    // not a key held by the button like the modifier toggles above.
+    updateCapsLock(e) {
+        document.getElementById('noVNC_send_capslock_button')
+            .classList.toggle("noVNC_selected", e.detail.capsLock);
+    },
+
     sendKey(keysym, code, down) {
         UI.rfb.sendKey(keysym, code, down);
+        UI.focusScreen();
+    },
 
+    focusScreen() {
         // Move focus to the screen in order to be able to use the
         // keyboard right after these extra keys.
         // The exception is when a virtual keyboard is used, because
@@ -1751,6 +1855,38 @@ const UI = {
 /* ------^-------
  *   /EXTRA KEYS
  * ==============
+ *   FUNCTION KEYS
+ * ------v------*/
+
+    openSpecialKeys() {
+        UI.closeAllPanels();
+        UI.openControlbar();
+
+        document.getElementById('noVNC_special_modifiers')
+            .classList.add("noVNC_open");
+        document.getElementById('noVNC_toggle_special_keys_button')
+            .classList.add("noVNC_selected");
+    },
+
+    closeSpecialKeys() {
+        document.getElementById('noVNC_special_modifiers')
+            .classList.remove("noVNC_open");
+        document.getElementById('noVNC_toggle_special_keys_button')
+            .classList.remove("noVNC_selected");
+    },
+
+    toggleSpecialKeys() {
+        if (document.getElementById('noVNC_special_modifiers')
+            .classList.contains("noVNC_open")) {
+            UI.closeSpecialKeys();
+        } else  {
+            UI.openSpecialKeys();
+        }
+    },
+
+/* ------^-------
+ *   /FUNCTION KEYS
+ * ==============
  *     MISC
  * ------v------*/
 
@@ -1766,12 +1902,20 @@ const UI = {
                 .classList.add('noVNC_hidden');
             document.getElementById('noVNC_toggle_extra_keys_button')
                 .classList.add('noVNC_hidden');
+            document.getElementById('noVNC_toggle_special_keys_button')
+                .classList.add('noVNC_hidden');
+            document.getElementById('noVNC_send_ctrl_alt_del_button')
+                .classList.add('noVNC_hidden');
             document.getElementById('noVNC_clipboard_button')
                 .classList.add('noVNC_hidden');
         } else {
             document.getElementById('noVNC_keyboard_button')
                 .classList.remove('noVNC_hidden');
             document.getElementById('noVNC_toggle_extra_keys_button')
+                .classList.remove('noVNC_hidden');
+            document.getElementById('noVNC_toggle_special_keys_button')
+                .classList.remove('noVNC_hidden');
+            document.getElementById('noVNC_send_ctrl_alt_del_button')
                 .classList.remove('noVNC_hidden');
             document.getElementById('noVNC_clipboard_button')
                 .classList.remove('noVNC_hidden');
