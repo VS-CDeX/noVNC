@@ -39,7 +39,7 @@ export default class Keyboard {
 
     // ===== PRIVATE METHODS =====
 
-    _sendKeyEvent(keysym, code, down, numlock = null) {
+    _sendKeyEvent(keysym, code, down, numlock = null, capslock = null) {
         if (down) {
             this._keyDownList[code] = keysym;
         } else {
@@ -52,7 +52,7 @@ export default class Keyboard {
 
         Log.Debug("onkeyevent " + (down ? "down" : "up") +
                   ", keysym: " + keysym, ", code: " + code);
-        this.onkeyevent(keysym, code, down, numlock);
+        this.onkeyevent(keysym, code, down, numlock, capslock);
     }
 
     _getKeyCode(e) {
@@ -92,11 +92,16 @@ export default class Keyboard {
         const code = this._getKeyCode(e);
         let keysym = KeyboardUtil.getKeysym(e);
         let numlock = e.getModifierState('NumLock');
+        let capslock = e.getModifierState('CapsLock');
 
         // getModifierState for NumLock is not supported on mac and ios and always returns false.
         // Set to null to indicate unknown/unsupported instead.
         if (browser.isMac() || browser.isIOS()) {
             numlock = null;
+        }
+        // iOS does not report a meaningful Caps Lock state
+        if (browser.isIOS()) {
+            capslock = null;
         }
 
         // Windows doesn't have a proper AltGr, but handles it using
@@ -119,7 +124,7 @@ export default class Keyboard {
                 //        key to "AltGraph".
                 keysym = KeyTable.XK_ISO_Level3_Shift;
             } else {
-                this._sendKeyEvent(KeyTable.XK_Control_L, "ControlLeft", true, numlock);
+                this._sendKeyEvent(KeyTable.XK_Control_L, "ControlLeft", true, numlock, capslock);
             }
         }
 
@@ -132,8 +137,8 @@ export default class Keyboard {
                 // If it's a virtual keyboard then it should be
                 // sufficient to just send press and release right
                 // after each other
-                this._sendKeyEvent(keysym, code, true, numlock);
-                this._sendKeyEvent(keysym, code, false, numlock);
+                this._sendKeyEvent(keysym, code, true, numlock, capslock);
+                this._sendKeyEvent(keysym, code, false, numlock, capslock);
             }
 
             stopEvent(e);
@@ -172,8 +177,8 @@ export default class Keyboard {
         // which toggles on each press, but not on release. So pretend
         // it was a quick press and release of the button.
         if (browser.isMac() && (code === 'CapsLock')) {
-            this._sendKeyEvent(KeyTable.XK_Caps_Lock, 'CapsLock', true, numlock);
-            this._sendKeyEvent(KeyTable.XK_Caps_Lock, 'CapsLock', false, numlock);
+            this._sendKeyEvent(KeyTable.XK_Caps_Lock, 'CapsLock', true, numlock, capslock);
+            this._sendKeyEvent(KeyTable.XK_Caps_Lock, 'CapsLock', false, numlock, capslock);
             stopEvent(e);
             return;
         }
@@ -203,7 +208,7 @@ export default class Keyboard {
             return;
         }
 
-        this._sendKeyEvent(keysym, code, true, numlock);
+        this._sendKeyEvent(keysym, code, true, numlock, capslock);
     }
 
     // Legacy event for browsers without code/key

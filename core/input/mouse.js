@@ -195,7 +195,10 @@ export default class Mouse {
 
     _handleMouseMove(e) {
         this._updateMousePosition(e);
-        this.onmousemove(this._pos.x, this._pos.y);
+        // touch events carry no modifier state
+        const capslock = typeof e.getModifierState === 'function' ?
+            e.getModifierState('CapsLock') : null;
+        this.onmousemove(this._pos.x, this._pos.y, capslock);
         stopEvent(e);
     }
 

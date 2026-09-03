@@ -2314,6 +2314,180 @@ describe('Remote Frame Buffer Protocol Client', function () {
             });
         });
 
+        describe('Caps Lock sync with the local keyboard', function () {
+            function sendLedState(state) {
+                let data = [0, 0];       // FramebufferUpdate, padding
+                push16(data, 1);         // one rect
+                push16(data, 0); push16(data, 0); push16(data, 1); push16(data, 1);
+                push32(data, -261);      // QEMU LED state pseudo-encoding
+                push8(data, state);
+                client._sock._websocket._receive_data(new Uint8Array(data));
+            }
+
+            beforeEach(function () {
+                sinon.stub(client, 'sendKey');
+            });
+
+            it('should fix the remote caps lock when it differs from the local keyboard', function () {
+                sendLedState(0b100);
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+
+                expect(client.sendKey).to.have.been.calledTwice;
+                expect(client.sendKey.firstCall).to.have.been.calledWith(0xFFE5, 'CapsLock');
+                expect(client.sendKey.secondCall).to.have.been.calledWith(0x61, 'KeyA', true);
+            });
+
+            it('should not fix again before the guest confirms the fix', function () {
+                sendLedState(0b100);
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                client._handleKeyEvent(0x62, 'KeyB', true, null, false);
+
+                expect(client.sendKey).to.have.callCount(3);
+                expect(client.sendKey.lastCall).to.have.been.calledWith(0x62, 'KeyB', true);
+            });
+
+            it('should follow the local keyboard again once the guest confirmed', function () {
+                sendLedState(0b100);
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                sendLedState(0b000);
+                client.sendKey.resetHistory();
+
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                expect(client.sendKey).to.have.been.calledOnce;
+
+                client._handleKeyEvent(0x41, 'KeyA', true, null, true);
+                expect(client.sendKey).to.have.callCount(3);
+                expect(client.sendKey.getCall(1)).to.have.been.calledWith(0xFFE5, 'CapsLock');
+            });
+
+            it('should keep the state toggled by the toolbar button', function () {
+                sendLedState(0b000);
+                client.toggleCapsLock();
+                expect(client.sendKey).to.have.been.calledWith(0xFFE5, 'CapsLock');
+                sendLedState(0b100);
+                client.sendKey.resetHistory();
+
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                expect(client.sendKey).to.have.been.calledOnce;
+                expect(client.sendKey.firstCall).to.have.been.calledWith(0x61, 'KeyA', true);
+                expect(client._capsLockInverted).to.be.true;
+            });
+
+            it('should keep the offset across a physical caps lock press', function () {
+                sendLedState(0b000);
+                client.toggleCapsLock();
+                sendLedState(0b100);
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                client.sendKey.resetHistory();
+
+                client._handleKeyEvent(0xFFE5, 'CapsLock', true, null, true);
+                sendLedState(0b000);
+                client._handleKeyEvent(0x41, 'KeyA', true, null, true);
+
+                expect(client.sendKey).to.have.been.calledTwice;
+                expect(client.sendKey.firstCall).to.have.been.calledWith(0xFFE5, 'CapsLock', true);
+                expect(client.sendKey.secondCall).to.have.been.calledWith(0x41, 'KeyA', true);
+                expect(client._capsLockInverted).to.be.true;
+            });
+
+            it('should drop the offset when the guest changes caps lock on its own', function () {
+                sendLedState(0b000);
+                client.toggleCapsLock();
+                sendLedState(0b100);
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                client.sendKey.resetHistory();
+
+                sendLedState(0b000);
+                expect(client._capsLockInverted).to.be.false;
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                expect(client.sendKey).to.have.been.calledOnce;
+
+                sendLedState(0b100);
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                expect(client.sendKey).to.have.callCount(3);
+                expect(client.sendKey.getCall(1)).to.have.been.calledWith(0xFFE5, 'CapsLock');
+            });
+
+            it('should wait for both updates after two quick toggles', function () {
+                sendLedState(0b000);
+                client.toggleCapsLock();
+                client.toggleCapsLock();
+                client.sendKey.resetHistory();
+
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                expect(client.sendKey).to.have.been.calledOnce;
+
+                sendLedState(0b100);
+                sendLedState(0b000);
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                expect(client.sendKey).to.have.been.calledTwice;
+                expect(client._capsLockInverted).to.be.false;
+            });
+
+            it('should follow the local keyboard when the pointer moves over the screen', function () {
+                sendLedState(0b000);
+                client._handleMouseMove(1, 1, true);
+
+                expect(client.sendKey).to.have.been.calledOnce;
+                expect(client.sendKey.firstCall).to.have.been.calledWith(0xFFE5, 'CapsLock');
+
+                client._handleMouseMove(2, 2, true);
+                expect(client.sendKey).to.have.been.calledOnce;
+            });
+
+            it('should not count the first LED report as the result of a toggle', function () {
+                client.toggleCapsLock();
+                sendLedState(0b000);
+                expect(client._capsLockAwaitingLed).to.be.true;
+                sendLedState(0b100);
+                expect(client._capsLockAwaitingLed).to.be.false;
+                client.sendKey.resetHistory();
+
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                expect(client.sendKey).to.have.been.calledOnce;
+                expect(client._capsLockInverted).to.be.true;
+            });
+
+            it('should not keep waiting for LED reports on a repeated caps lock key', function () {
+                sendLedState(0b000);
+                client._handleKeyEvent(0xFFE5, 'CapsLock', true, null, false);
+                client._handleKeyEvent(0xFFE5, 'CapsLock', true, null, false);
+                sendLedState(0b100);
+                client.sendKey.resetHistory();
+
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                expect(client.sendKey).to.have.been.calledTwice;
+                expect(client.sendKey.firstCall).to.have.been.calledWith(0xFFE5, 'CapsLock');
+            });
+
+            it('should not touch caps lock while the sync is disabled', function () {
+                sendLedState(0b100);
+                client.capsLockSync = false;
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                expect(client.sendKey).to.have.been.calledOnce;
+                client.capsLockSync = true;
+                client._handleKeyEvent(0x61, 'KeyA', true, null, false);
+                expect(client.sendKey).to.have.been.calledThrice;
+            });
+
+            it('should leave caps lock alone when the local state is unknown', function () {
+                sendLedState(0b100);
+                client._handleKeyEvent(0x61, 'KeyA', true, null, null);
+
+                expect(client.sendKey).to.have.been.calledOnce;
+                expect(client.sendKey.firstCall).to.have.been.calledWith(0x61, 'KeyA', true);
+            });
+
+            it('should report the LED state as an event', function () {
+                const spy = sinon.spy();
+                client.addEventListener('ledstate', spy);
+                sendLedState(0b110);
+
+                expect(spy).to.have.been.calledOnce;
+                expect(spy.args[0][0].detail).to.deep.equal({ capsLock: true, numLock: true });
+            });
+        });
+
         describe('WebSocket event handlers', function () {
             // message events
             it('should do nothing if we receive an empty message and have nothing in the queue', function () {
