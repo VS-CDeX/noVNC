@@ -21,6 +21,13 @@ protocol stream.
     movement) should be prevented from being sent to the server.
     Disabled by default.
 
+`capsLockSync`
+  - Is a `boolean` indicating if the remote Caps Lock should be kept in
+    sync with the local keyboard (requires the server to report
+    [`ledstate`](#ledstate)). Enabled by default; disable it while
+    injecting key events that must not be affected by a Caps Lock
+    change.
+
 `focusOnClick`
   - Is a `boolean` indicating if keyboard focus should automatically be
     moved to the remote session when a `mousedown` or `touchstart`
@@ -124,6 +131,9 @@ protocol stream.
 
 [`RFB.sendCtrlAltDel()`](#rfbsendctrlaltdel)
   - Send Ctrl-Alt-Del key sequence.
+
+[`RFB.toggleCapsLock()`](#rfbtogglecapslock)
+  - Toggle Caps Lock on the remote session.
 
 [`RFB.focus()`](#rfbfocus)
   - Move keyboard focus to the remote session.
@@ -319,6 +329,19 @@ around [`RFB.sendKey()`](#rfbsendkey).
 ##### Syntax
 
     RFB.sendCtrlAltDel( );
+
+#### RFB.toggleCapsLock()
+
+The `RFB.toggleCapsLock()` method sends a *Caps Lock* key press to the
+remote session and keeps the new state: the remote Caps Lock normally
+follows the local keyboard (when the server reports
+[`ledstate`](#ledstate)), and after this call the relation between
+the two that results from the toggle is kept until the next call or
+until the remote side changes Caps Lock on its own.
+
+##### Syntax
+
+    RFB.toggleCapsLock( );
 
 #### RFB.focus()
 

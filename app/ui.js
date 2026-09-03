@@ -982,12 +982,26 @@ const UI = {
     writeText() {
         const text = document.getElementById('noVNC_clipboard_text').value;
         Log.Debug(">> UI.clipboardSend: " + text.length + " characters");
+        // Letters are typed as written whatever the guest Caps Lock state,
+        // which the Caps Lock button highlight mirrors
+        const capsLock = document.getElementById('noVNC_send_capslock_button')
+            .classList.contains("noVNC_selected");
         const textClip = text.trim().split("");
+        // the guest Caps Lock must not change under the text being typed
+        UI.rfb.capsLockSync = false;
         function f(t) {
+            if (!UI.rfb) return;
             const character = t.shift();
-            if (character === undefined) return;
+            if (character === undefined) {
+                UI.rfb.capsLockSync = true;
+                UI.rfb.focus();
+                return;
+            }
             let code = character.charCodeAt();
-            const needs_shift = /^[A-Z]$/.test(character) || '~!@#$%^&*()_+{}|:"<>?'.indexOf(character) !== -1;
+            const upper = /^[A-Z]$/.test(character);
+            const lower = /^[a-z]$/.test(character);
+            const needs_shift = (upper || lower) ? (upper !== capsLock)
+                : '~!@#$%^&*()_+{}|:"<>?'.indexOf(character) !== -1;
             const enter = '[\n]'.indexOf(character) !== -1;
             const tab = '[\t]'.indexOf(character) !== -1;
             if (code === 91) {
@@ -1013,13 +1027,9 @@ const UI = {
                     UI.rfb.sendKey(KeyTable.XK_Shift_L, "ShiftLeft", false);
                 }
             }
-            if (t.length > 0) {
-                setTimeout( () => {
-                    f(t);
-                }, 50);
-            } else {
-                UI.rfb.focus();
-            }
+            setTimeout(() => {
+                f(t);
+            }, 50);
         }
 
         f(textClip);
@@ -1622,7 +1632,7 @@ const UI = {
     },
 
     sendCapsLock() {
-        UI.rfb.sendKey(KeyTable.XK_Caps_Lock, "CapsLock");
+        UI.rfb.toggleCapsLock();
     },
 
     // The highlight mirrors the Caps Lock LED reported by the server,
