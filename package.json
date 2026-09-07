@@ -38,7 +38,7 @@
     "browserify": "latest",
     "chai": "latest",
     "commander": "latest",
-    "eslint": "latest",
+    "eslint": "^9",
     "fs-extra": "latest",
     "globals": "latest",
     "jsdom": "latest",
