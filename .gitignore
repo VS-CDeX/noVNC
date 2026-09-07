@@ -11,14 +11,11 @@ recordings
 *~
 noVNC-*.tgz
 
-# IDE FILES #
-######################
-
+# IDE files
 /.idea/*
 /.vscode
 
-# OS generated files #
-######################
+# OS generated files
 .history
 .DS_Store
 .DS_Store?
