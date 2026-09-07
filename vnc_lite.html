@@ -58,6 +58,7 @@
     <script type="module" crossorigin="anonymous">
         // RFB holds the API to connect and communicate with a VNC server
         import RFB from './core/rfb.js';
+        import { createToken } from './app/webutil.js';
 
         let rfb;
         let desktopName;
@@ -132,6 +133,7 @@
         let port = readQueryVariable('port', window.location.port);
         const password = readQueryVariable('password');
         const path = readQueryVariable('path', 'websockify');
+        createToken();
 
         // | | |         | | |
         // | | | Connect | | |

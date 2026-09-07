@@ -69,6 +69,15 @@ export function getConfigVar(name, defVal) {
     return val;
 }
 
+// nova-novncproxy reads the console token from the WebSocket URL or,
+// failing that, from a cookie
+export function createToken() {
+    const token = getConfigVar('token', null);
+    if (token) {
+        createCookie('token', token);
+    }
+}
+
 /*
  * Cookie handling. Dervied from: http://www.quirksmode.org/js/cookies.html
  */

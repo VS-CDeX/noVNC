@@ -95,6 +95,10 @@ export default class Keyboard {
         if (browser.isMac() || browser.isIOS()) {
             numlock = null;
         }
+        // iOS does not report a meaningful Caps Lock state
+        if (browser.isIOS()) {
+            capslock = null;
+        }
 
         // Windows doesn't have a proper AltGr, but handles it using
         // fake Ctrl+Alt. However the remote end might not be Windows,

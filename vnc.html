@@ -112,7 +112,7 @@
     <!-- noVNC control bar -->
     <div id="noVNC_control_bar_anchor" class="noVNC_vcenter">
 
-        <div id="noVNC_control_bar">
+        <div id="noVNC_control_bar" class="noVNC_open">
             <div id="noVNC_control_bar_handle" title="Hide/Show the control bar"><div></div></div>
 
             <div class="noVNC_scroll">
@@ -147,17 +147,69 @@
                 <input type="image" alt="Windows" src="app/images/windows.svg"
                     id="noVNC_toggle_windows_button" class="noVNC_button"
                     title="Toggle Windows">
+                <input type="image" alt="Shift" src="app/images/shift.svg"
+                    id="noVNC_toggle_shift_button" class="noVNC_button"
+                    title="Toggle Shift">
+                <input type="image" alt="Caps Lock" src="app/images/capslock.svg"
+                    id="noVNC_send_capslock_button" class="noVNC_button"
+                    title="Send Caps Lock">
                 <input type="image" alt="Tab" src="app/images/tab.svg"
                     id="noVNC_send_tab_button" class="noVNC_button"
                     title="Send Tab">
                 <input type="image" alt="Esc" src="app/images/esc.svg"
                     id="noVNC_send_esc_button" class="noVNC_button"
                     title="Send Escape">
-                <input type="image" alt="Ctrl+Alt+Del" src="app/images/ctrlaltdel.svg"
-                    id="noVNC_send_ctrl_alt_del_button" class="noVNC_button"
-                    title="Send Ctrl-Alt-Del">
             </div>
             </div>
+
+            <!-- Function keys -->
+            <input type="image" alt="F1-F12 keys" src="app/images/togglespecialkeys.svg"
+                id="noVNC_toggle_special_keys_button" class="noVNC_button"
+                title="Show F1-F12 keys">
+            <div class="noVNC_vcenter">
+            <div id="noVNC_special_modifiers" class="noVNC_panel">
+                <input type="image" alt="F1" src="app/images/f1.svg"
+                    id="noVNC_send_f1_button" class="noVNC_button"
+                    title="Send F1">
+                <input type="image" alt="F2" src="app/images/f2.svg"
+                    id="noVNC_send_f2_button" class="noVNC_button"
+                    title="Send F2">
+                <input type="image" alt="F3" src="app/images/f3.svg"
+                    id="noVNC_send_f3_button" class="noVNC_button"
+                    title="Send F3">
+                <input type="image" alt="F4" src="app/images/f4.svg"
+                    id="noVNC_send_f4_button" class="noVNC_button"
+                    title="Send F4">
+                <input type="image" alt="F5" src="app/images/f5.svg"
+                    id="noVNC_send_f5_button" class="noVNC_button"
+                    title="Send F5">
+                <input type="image" alt="F6" src="app/images/f6.svg"
+                    id="noVNC_send_f6_button" class="noVNC_button"
+                    title="Send F6">
+                <input type="image" alt="F7" src="app/images/f7.svg"
+                    id="noVNC_send_f7_button" class="noVNC_button"
+                    title="Send F7">
+                <input type="image" alt="F8" src="app/images/f8.svg"
+                    id="noVNC_send_f8_button" class="noVNC_button"
+                    title="Send F8">
+                <input type="image" alt="F9" src="app/images/f9.svg"
+                    id="noVNC_send_f9_button" class="noVNC_button"
+                    title="Send F9">
+                <input type="image" alt="F10" src="app/images/f10.svg"
+                    id="noVNC_send_f10_button" class="noVNC_button"
+                    title="Send F10">
+                <input type="image" alt="F11" src="app/images/f11.svg"
+                    id="noVNC_send_f11_button" class="noVNC_button"
+                    title="Send F11">
+                <input type="image" alt="F12" src="app/images/f12.svg"
+                    id="noVNC_send_f12_button" class="noVNC_button"
+                    title="Send F12">
+            </div>
+            </div>
+
+            <input type="image" alt="Ctrl+Alt+Del" src="app/images/ctrlaltdel.svg"
+                id="noVNC_send_ctrl_alt_del_button" class="noVNC_button"
+                title="Send Ctrl-Alt-Del">
 
             <!-- Shutdown/Reboot -->
             <input type="image" alt="Shutdown/Reboot" src="app/images/power.svg"
@@ -182,11 +234,16 @@
             <div id="noVNC_clipboard" class="noVNC_panel">
                 <div class="noVNC_heading">
                     <img alt="" src="app/images/clipboard.svg"> Clipboard
+                    <input type="button" class="noVNC_close"
+                           id="noVNC_clipboard_close_button" value="Close">
                 </div>
                 <p class="noVNC_subheading">
-                    Edit clipboard content in the textarea below.
+                    The text is typed into the session key by key.
                 </p>
                 <textarea id="noVNC_clipboard_text" rows=5></textarea>
+                <br>
+                <input type="button" id="noVNC_clipboard_clear_button" value="Clear">
+                <input type="button" id="noVNC_clipboard_send_button" value="Send">
             </div>
             </div>
 
@@ -197,7 +254,7 @@
 
             <!-- Settings -->
             <input type="image" alt="Settings" src="app/images/settings.svg"
-                id="noVNC_settings_button" class="noVNC_button"
+                id="noVNC_settings_button" class="noVNC_button noVNC_hidden"
                 title="Settings">
             <div class="noVNC_vcenter">
             <div id="noVNC_settings" class="noVNC_panel">

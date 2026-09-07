@@ -82,6 +82,13 @@ protocol stream.
     movement) should be prevented from being sent to the server.
     Disabled by default.
 
+`capsLockSync`
+  - Is a `boolean` indicating if the remote Caps Lock should be kept in
+    sync with the local keyboard (requires the server to report
+    [`ledstate`](#ledstate)). Enabled by default; disable it while
+    injecting key events that must not be affected by a Caps Lock
+    change.
+
 ### Events
 
 [`bell`](#bell)
@@ -91,6 +98,10 @@ protocol stream.
 [`capabilities`](#capabilities)
   - The `capabilities` event is fired when `RFB.capabilities` is
     updated.
+
+[`ledstate`](#ledstate)
+  - The `ledstate` event is fired when the server reports the state
+    of the remote lock keys.
 
 [`clipboard`](#clipboard)
   - The `clipboard` event is fired when clipboard data is received from
@@ -160,6 +171,9 @@ protocol stream.
 
 [`RFB.sendCtrlAltDel()`](#rfbsendctrlaltdel)
   - Send Ctrl-Alt-Del key sequence.
+
+[`RFB.toggleCapsLock()`](#rfbtogglecapslock)
+  - Toggle Caps Lock on the remote session.
 
 [`RFB.sendKey()`](#rfbsendkey)
   - Send a key event.
@@ -237,6 +251,12 @@ bell.
 The `capabilities` event is fired whenever an entry is added or removed
 from `RFB.capabilities`. The `detail` property is an `Object` with the
 property `capabilities` containing the new value of `RFB.capabilities`.
+
+#### ledstate
+
+The `ledstate` event is fired when the server reports the state of the
+remote lock keys (QEMU LED state extension). The `detail` property is
+an `Object` with the `boolean` properties `capsLock` and `numLock`.
 
 #### clippingviewport
 
@@ -460,6 +480,21 @@ around [`RFB.sendKey()`](#rfbsendkey).
 
 ```js
 RFB.sendCtrlAltDel();
+```
+
+#### RFB.toggleCapsLock()
+
+The `RFB.toggleCapsLock()` method sends a *Caps Lock* key press to the
+remote session and keeps the new state: the remote Caps Lock normally
+follows the local keyboard (when the server reports
+[`ledstate`](#ledstate)), and after this call the relation between
+the two that results from the toggle is kept until the next call or
+until the remote side changes Caps Lock on its own.
+
+##### Syntax
+
+```js
+RFB.toggleCapsLock();
 ```
 
 #### RFB.sendKey()

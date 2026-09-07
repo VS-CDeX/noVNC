@@ -10,7 +10,7 @@
 import { toUnsigned32bit, toSigned32bit } from './util/int.js';
 import * as Log from './util/logging.js';
 import { encodeUTF8, decodeUTF8 } from './util/strings.js';
-import { dragThreshold, supportsWebCodecsH264Decode } from './util/browser.js';
+import { dragThreshold, isIOS, supportsWebCodecsH264Decode } from './util/browser.js';
 import { clientToElement } from './util/element.js';
 import { setCapture } from './util/events.js';
 import EventTargetMixin from './util/eventtarget.js';
@@ -268,8 +268,12 @@ export default class RFB extends EventTargetMixin {
 
         this._keyboard = new Keyboard(this._canvas);
         this._keyboard.onkeyevent = this._handleKeyEvent.bind(this);
-        this._remoteCapsLock = null; // Null indicates unknown or irrelevant
-        this._remoteNumLock = null;
+        this._remoteNumLock = null; // Null indicates unknown or irrelevant
+        this._remoteCapsLock = null;
+        this._capsLockInverted = false;     // Relation kept between remote and local Caps Lock
+                                            // (null: learn it from the next sync)
+        this._capsLockAwaitingLed = false;  // A Caps Lock press of ours is not yet reported back
+        this._capsLockSync = true;
 
         this._gestures = new GestureHandler();
 
@@ -306,6 +310,9 @@ export default class RFB extends EventTargetMixin {
     }
 
     // ===== PROPERTIES =====
+
+    get capsLockSync() { return this._capsLockSync; }
+    set capsLockSync(enabled) { this._capsLockSync = enabled; }
 
     get viewOnly() { return this._viewOnly; }
     set viewOnly(viewOnly) {
@@ -446,6 +453,16 @@ export default class RFB extends EventTargetMixin {
         this.sendKey(KeyTable.XK_Delete, "Delete", false);
         this.sendKey(KeyTable.XK_Alt_L, "AltLeft", false);
         this.sendKey(KeyTable.XK_Control_L, "ControlLeft", false);
+    }
+
+    toggleCapsLock() {
+        if (this._rfbConnectionState !== 'connected' || this._viewOnly) { return; }
+        this.sendKey(KeyTable.XK_Caps_Lock, "CapsLock");
+        this._capsLockAwaitingLed = true;
+        // The relation to the local Caps Lock is learned again once the
+        // guest has reported the new state, so the sync keeps the
+        // toggled state instead of undoing it
+        this._capsLockInverted = null;
     }
 
     machineShutdown() {
@@ -1019,25 +1036,21 @@ export default class RFB extends EventTargetMixin {
     }
 
     _handleKeyEvent(keysym, code, down, numlock, capslock) {
-        // If remote state of capslock is known, and it doesn't match the local led state of
-        // the keyboard, we send a capslock keypress first to bring it into sync.
-        // If we just pressed CapsLock, or we toggled it remotely due to it being out of sync
-        // we clear the remote state so that we don't send duplicate or spurious fixes,
-        // since it may take some time to receive the new remote CapsLock state.
+        // The guest Caps Lock follows the local keyboard, optionally kept
+        // opposite to it by the Caps Lock toolbar button. Nothing is learned
+        // or fixed while Caps Lock presses of ours still wait for the guest
+        // to report their effect, so LED updates in flight cannot undo them.
         if (code == 'CapsLock' && down) {
-            this._remoteCapsLock = null;
-        }
-        if (this._remoteCapsLock !== null && capslock !== null && this._remoteCapsLock !== capslock && down) {
-            Log.Debug("Fixing remote caps lock");
-
-            this.sendKey(KeyTable.XK_Caps_Lock, 'CapsLock', true);
-            this.sendKey(KeyTable.XK_Caps_Lock, 'CapsLock', false);
-            // We clear the remote capsLock state when we do this to prevent issues with doing this twice
-            // before we receive an update of the the remote state.
-            this._remoteCapsLock = null;
+            this._capsLockAwaitingLed = true;
+        } else if (down) {
+            this._syncCapsLock(capslock);
         }
 
-        // Logic for numlock is exactly the same.
+        // If remote state of numlock is known, and it doesn't match the local led state of
+        // the keyboard, we send a numlock keypress first to bring it into sync.
+        // If we just pressed NumLock, or we toggled it remotely due to it being out of sync
+        // we clear the remote state so that we don't send duplicate or spurious fixes,
+        // since it may take some time to receive the new remote NumLock state.
         if (code == 'NumLock' && down) {
             this._remoteNumLock = null;
         }
@@ -1149,6 +1162,12 @@ export default class RFB extends EventTargetMixin {
                 this._handleMouseButton(pos.x, pos.y, bmask);
                 break;
             case 'mousemove':
+                // Pointer events also carry the local Caps Lock state, so a
+                // change made outside the console is followed as soon as the
+                // pointer is back over it, before the first key is typed
+                if (!isIOS()) {
+                    this._syncCapsLock(ev.getModifierState('CapsLock'));
+                }
                 if (this._viewportDragging) {
                     const deltaX = this._viewportDragPos.x - pos.x;
                     const deltaY = this._viewportDragPos.y - pos.y;
@@ -1166,6 +1185,21 @@ export default class RFB extends EventTargetMixin {
                 }
                 this._handleMouseMove(pos.x, pos.y);
                 break;
+        }
+    }
+
+    _syncCapsLock(capslock) {
+        if (this._rfbConnectionState !== 'connected' || this._viewOnly ||
+            !this._capsLockSync || this._capsLockAwaitingLed ||
+            this._remoteCapsLock === null || capslock === null) { return; }
+        if (this._capsLockInverted === null) {
+            this._capsLockInverted = this._remoteCapsLock !== capslock;
+        }
+        const expected = capslock !== this._capsLockInverted;
+        if (this._remoteCapsLock !== expected) {
+            Log.Debug("Fixing remote caps lock");
+            this.sendKey(KeyTable.XK_Caps_Lock, 'CapsLock');
+            this._capsLockAwaitingLed = true;
         }
     }
 
@@ -2882,8 +2916,23 @@ export default class RFB extends EventTargetMixin {
         // ScrollLock state can be retrieved with data & 1. This is currently not needed.
         let numLock = data & 2 ? true : false;
         let capsLock = data & 4 ? true : false;
-        this._remoteCapsLock = capsLock;
         this._remoteNumLock = numLock;
+        // The first report only establishes the baseline; later changes
+        // are either the effect of a press of ours or an external one
+        if (this._remoteCapsLock !== null && capsLock !== this._remoteCapsLock) {
+            if (this._capsLockAwaitingLed) {
+                this._capsLockAwaitingLed = false;
+            } else {
+                // the guest changed Caps Lock on its own (reboot, snapshot,
+                // another client): follow the local keyboard again
+                this._capsLockInverted = false;
+            }
+        }
+        this._remoteCapsLock = capsLock;
+
+        this.dispatchEvent(new CustomEvent(
+            "ledstate",
+            { detail: { capsLock: capsLock, numLock: numLock } }));
 
         return true;
     }

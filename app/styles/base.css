@@ -166,7 +166,7 @@ html {
 
     padding: 15px;
 
-    transition: 0.5s ease-in-out;
+    transition: 0.3s ease-in-out;
 
     transform: translateY(-50px);
     opacity: 0;
@@ -223,7 +223,7 @@ html {
     position: fixed;
     z-index: 10;
 
-    transition: 0.5s ease-in-out;
+    transition: 0.3s ease-in-out;
 
     /* Edge misrenders animations wihthout this */
     transform: translateX(0);
@@ -240,7 +240,7 @@ html {
     position: relative;
     left: -100%;
 
-    transition: 0.5s ease-in-out;
+    transition: 0.3s ease-in-out;
 
     background-color: var(--novnc-blue);
     border-radius: 0 12px 12px 0;
@@ -407,7 +407,7 @@ html {
 .noVNC_panel {
     transform: translateX(25px);
 
-    transition: 0.5s ease-in-out;
+    transition: 0.3s ease-in-out;
 
     box-sizing: border-box; /* so max-width don't have to care about padding */
     max-width: calc(100vw - 75px - 25px); /* minus left and right margins */
@@ -565,11 +565,14 @@ html {
 }
 
 /* Extra manual keys */
-:root:not(.noVNC_connected) #noVNC_toggle_extra_keys_button {
+:root:not(.noVNC_connected) #noVNC_toggle_extra_keys_button,
+:root:not(.noVNC_connected) #noVNC_toggle_special_keys_button,
+:root:not(.noVNC_connected) #noVNC_send_ctrl_alt_del_button {
     display: none;
 }
 
-#noVNC_modifiers {
+#noVNC_modifiers,
+#noVNC_special_modifiers {
     background-color: var(--novnc-darkgrey);
     border: none;
     padding: 10px;
@@ -592,6 +595,9 @@ html {
 /* Clipboard */
 :root:not(.noVNC_connected) #noVNC_clipboard_button {
     display: none;
+}
+.noVNC_close {
+    float: right;
 }
 #noVNC_clipboard_text {
     width: 360px;
@@ -658,7 +664,7 @@ html {
 
     cursor: pointer;
 
-    transition: 0.5s ease-in-out;
+    transition: 0.3s ease-in-out;
 
     visibility: hidden;
     opacity: 0;
@@ -715,7 +721,7 @@ html {
  */
 
 #noVNC_connect_dlg {
-    transition: 0.5s ease-in-out;
+    transition: 0.3s ease-in-out;
 
     transform: scale(0, 0);
     visibility: hidden;
@@ -727,7 +733,7 @@ html {
     opacity: 1;
 }
 #noVNC_connect_dlg .noVNC_logo {
-    transition: 0.5s ease-in-out;
+    transition: 0.3s ease-in-out;
     padding: 10px;
     margin-bottom: 10px;
 
@@ -817,7 +823,7 @@ html {
 
 /* Transition screen */
 #noVNC_transition {
-    transition: 0.5s ease-in-out;
+    transition: 0.3s ease-in-out;
 
     display: flex;
     opacity: 0;
@@ -885,6 +891,7 @@ html {
     font-family: 'Orbitron';
     font-style: normal;
     font-weight: 700;
+    font-display: block;
     src: local('?'), url('Orbitron700.woff') format('woff'),
                      url('Orbitron700.ttf') format('truetype');
 }
