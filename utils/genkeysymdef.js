@@ -1,22 +1,22 @@
 #!/usr/bin/env node
 /*
  * genkeysymdef: X11 keysymdef.h to JavaScript converter
- * Copyright (C) 2018 The noVNC Authors
+ * Copyright (C) 2018 The noVNC authors
  * Licensed under MPL 2.0 (see LICENSE.txt)
  */
 
 "use strict";
 
-const fs = require('fs');
+import fs from 'fs';
 
-let show_help = process.argv.length === 2;
+let showHelp = process.argv.length === 2;
 let filename;
 
 for (let i = 2; i < process.argv.length; ++i) {
     switch (process.argv[i]) {
         case "--help":
         case "-h":
-            show_help = true;
+            showHelp = true;
             break;
         case "--file":
         case "-f":
@@ -26,11 +26,11 @@ for (let i = 2; i < process.argv.length; ++i) {
 }
 
 if (!filename) {
-    show_help = true;
+    showHelp = true;
     console.log("Error: No filename specified\n");
 }
 
-if (show_help) {
+if (showHelp) {
     console.log("Parses a *nix keysymdef.h to generate Unicode code point mappings");
     console.log("Usage: node parse.js [options] filename:");
     console.log("  -h [ --help ]                 Produce this help message");
